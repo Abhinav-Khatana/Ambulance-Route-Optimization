@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAROS Dispatch Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="frontend/styles.css">
+</head>
+<body>
+<div id="app">
+
+
+  <div class="topbar">
+    <div class="logo">
+      <div class="logo-mark">🚑</div>
+      <div>
+        <div class="logo-txt"><b>SAROS</b></div>
+        <div class="logo-sub">Emergency route optimization command center</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <div class="pill"><div class="led off" id="be-led"></div><span id="be-lbl">Connecting…</span></div>
+      <div class="pill"><div class="led"></div><span>Dehradun road network</span></div>
+    </div>
+    <div class="topbar-r">
+      <span>Live dispatch console</span>
+      <span style="opacity:.3">|</span>
+      <span class="clk" id="clk">--:--:--</span>
+    </div>
+  </div>
+
+
+  <div class="body">
+
+
+    <div class="side">
+      <div class="side-sc">
+
+
+        <div class="blk">
+          <div class="blk-title">Ambulance Location</div>
+          <div class="row2">
+            <div class="fld"><div class="fld-l">Latitude</div>
+              <input type="number" class="inp" id="s-lat" value="30.31654" step="0.0001"></div>
+            <div class="fld"><div class="fld-l">Longitude</div>
+              <input type="number" class="inp" id="s-lng" value="77.99128" step="0.0001"></div>
+          </div>
+          <button class="btn-s" onclick="autoGPS()">Use browser GPS</button>
+          <div class="hint-txt">Click a mapped road to place the ambulance pin.</div>
+        </div>
+
+
+        <div class="blk">
+          <div class="blk-title">Destination Hospital</div>
+          <div class="h-list" id="h-list">
+            <div class="et" style="text-align:center;padding:10px">Loading…</div>
+          </div>
+        </div>
+
+
+        <div class="blk">
+          <div class="blk-title">Manual Traffic</div>
+          <div class="mt-lbl">Road</div>
+          <select class="inp" id="road-select"></select>
+          <div class="mt-row">
+            <div>
+              <div class="mt-lbl">Level</div>
+              <select class="inp" id="traffic-select">
+                <option value="0">Clear</option>
+                <option value="1">Moderate</option>
+                <option value="2">Heavy</option>
+              </select>
+            </div>
+            <button class="btn-s" style="height:34px;align-self:end" onclick="applyManualTraffic()">Apply</button>
+          </div>
+        </div>
+
+
+        <div class="blk">
+          <div class="blk-title">Auto Traffic</div>
+          <div class="auto-traffic-head">
+            <div class="auto-toggle">
+              <input type="checkbox" id="auto-recalc-toggle" checked onchange="setAutoRecalcEnabled(this.checked)">
+              <label for="auto-recalc-toggle">Auto recalculate on traffic change</label>
+            </div>
+            <span class="auto-pill" id="auto-traffic-pill">LIVE</span>
+          </div>
+          <div class="auto-traffic-row">
+            <button class="btn-s" onclick="toggleAutoTraffic()" id="auto-traffic-btn">Auto traffic: ON</button>
+          </div>
+          <button class="btn-s" style="margin-top:6px" onclick="refreshAutoTraffic()">Randomize now</button>
+          <button class="btn-clear" onclick="clearAllTraffic()">Clear all traffic</button>
+          <div class="hint-txt">Automatic traffic refreshes every 10 seconds. Manual changes remain applied on selected roads.</div>
+        </div>
+
+      </div>
+
+
+      <div class="traffic-legend">
+        <div class="tl-title">Road Traffic</div>
+        <div class="tl-items">
+          <div class="tl-item"><div class="tl-dot" style="background:var(--t-clear)"></div>Clear</div>
+          <div class="tl-item"><div class="tl-dot" style="background:var(--t-moderate)"></div>Moderate</div>
+          <div class="tl-item"><div class="tl-dot" style="background:var(--t-heavy)"></div>Heavy</div>
+        </div>
+      </div>
+      <div class="tl-instruction">Click a road to place the ambulance. Ctrl-click a road to cycle traffic.</div>
+
+      <button class="btn-run" id="run-btn" onclick="compute()">
+        Compute optimal route
+      </button>
+    </div>
+
+
+    <div class="map-col">
+
+
+      <div class="map-area">
+        <div id="map" style="position:relative;width:100%;height:100%;overflow:hidden;background:#0b1220;cursor:crosshair;">
+          <svg id="graphSVG" viewBox="0 0 900 700"
+               preserveAspectRatio="xMidYMid meet"
+               style="width:100%;height:100%;display:block;">
+            <defs>
+              <pattern id="gridPat" width="45" height="45" patternUnits="userSpaceOnUse">
+                <path d="M 45 0 L 0 0 0 45" fill="none" stroke="rgba(28,47,74,.18)" stroke-width=".6"/>
+              </pattern>
+              <filter id="glow-green" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+              <filter id="glow-red" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+
+            <rect width="900" height="700" fill="#0b1220"/>
+            <rect width="900" height="700" fill="url(#gridPat)"/>
+
+            <rect x="8" y="8" width="884" height="684" fill="none"
+                  stroke="rgba(28,47,74,.5)" stroke-width="1" rx="4"/>
+            <g id="basemapLayer" opacity=".55" fill="none" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M65 545 C185 492 260 504 375 446 S578 324 827 284"
+                    stroke="rgba(53,111,172,.34)" stroke-width="2.4"/>
+              <path d="M88 250 C208 286 285 270 375 230 S560 160 782 172"
+                    stroke="rgba(11,146,117,.26)" stroke-width="2"/>
+              <path d="M180 630 C240 510 288 420 360 346 S498 236 610 90"
+                    stroke="rgba(91,111,105,.26)" stroke-width="1.8"/>
+              <path d="M700 638 C642 520 604 422 510 360 S330 250 170 96"
+                    stroke="rgba(91,111,105,.22)" stroke-width="1.6"/>
+              <path d="M116 410 C255 386 382 398 510 454 S688 532 820 494"
+                    stroke="rgba(220,159,53,.28)" stroke-width="1.8"/>
+              <text x="96" y="92" font-family="Inter, sans-serif" font-size="11" fill="rgba(45,63,59,.36)">Rajpur Road</text>
+              <text x="650" y="604" font-family="Inter, sans-serif" font-size="11" fill="rgba(45,63,59,.34)">ISBT Corridor</text>
+              <text x="390" y="346" font-family="Inter, sans-serif" font-size="11" fill="rgba(45,63,59,.32)">Clock Tower Zone</text>
+            </g>
+
+            <text x="16" y="694" font-family="'Share Tech Mono',monospace" font-size="8"
+                  fill="rgba(106,138,173,.35)">30.260°N 77.940°E</text>
+            <text x="784" y="694" font-family="'Share Tech Mono',monospace" font-size="8"
+                  fill="rgba(106,138,173,.35)">78.110°E</text>
+            <text x="16" y="20" font-family="'Share Tech Mono',monospace" font-size="8"
+                  fill="rgba(106,138,173,.35)">30.380°N</text>
+
+            <text x="450" y="694" text-anchor="middle" font-family="'Share Tech Mono',monospace"
+                  font-size="9" fill="rgba(106,138,173,.3)">
+              DEHRADUN ROAD NETWORK - 65 NODES · 142 EDGES
+            </text>
+
+            <g id="edgeGroup"></g>
+            <g id="nodeGroup"></g>
+            <g id="routeGroup"></g>
+            <g id="markerGroup"></g>
+          </svg>
+
+
+          <div id="svgTip" style="
+            display:none;position:absolute;pointer-events:none;z-index:40;
+            background:rgba(11,18,32,.96);border:1px solid #263f60;border-radius:5px;
+            padding:6px 10px;font-family:'Share Tech Mono',monospace;font-size:10px;
+            color:#cee0f5;box-shadow:0 4px 20px rgba(0,0,0,.55);max-width:200px;line-height:1.5;
+          "></div>
+        </div>
+
+
+        <div class="map-top">
+          <div class="badge">
+            Graph Map · <b id="mbadge">READY - Place ambulance on roads</b>
+          </div>
+        </div>
+
+
+        <div class="ap">
+          <div class="ap-h">Algorithm Pipeline</div>
+          <div class="ap-step"><div class="ap-n" id="s0">1</div><div class="ap-t" id="t0">Load graph + traffic weights</div></div>
+          <div class="ap-step"><div class="ap-n" id="s1">2</div><div class="ap-t" id="t1">Dijkstra min-heap exploration</div></div>
+          <div class="ap-step"><div class="ap-n" id="s2">3</div><div class="ap-t" id="t2">Record D* = dist[dst]</div></div>
+          <div class="ap-step"><div class="ap-n" id="s3">4</div><div class="ap-t" id="t3">A* with h(n)+g(n) &gt; D* pruning</div></div>
+          <div class="ap-step"><div class="ap-n" id="s4">5</div><div class="ap-t" id="t4">Reconstruct path via prev[]</div></div>
+          <div class="cx">
+            <div class="cx-c"><div class="cx-l">TIME</div><div class="cx-v">O(E·logV)</div></div>
+            <div class="cx-c"><div class="cx-l">SPACE</div><div class="cx-v">O(V+E)</div></div>
+          </div>
+        </div>
+
+
+        <div class="stats">
+          <div class="sv"><div class="sv-l">ETA</div><div class="sv-v cr" id="s-eta">—</div></div>
+          <div class="sv"><div class="sv-l">Distance</div><div class="sv-v ca" id="s-dist">—</div></div>
+          <div class="sv"><div class="sv-l">Dijkstra ✓</div><div class="sv-v cb" id="s-dij">—</div></div>
+          <div class="sv"><div class="sv-l">A* ✓</div><div class="sv-v cg" id="s-ast">—</div></div>
+          <div class="sv"><div class="sv-l">Pruned</div><div class="sv-v cg" id="s-prun">—</div></div>
+          <div class="sv"><div class="sv-l">BFS</div><div class="sv-v cb" id="s-bfs">—</div></div>
+        </div>
+
+
+        <div class="loader" id="loader">
+          <div class="spin"></div>
+          <div class="ld-t" id="ld-t">Computing…</div>
+          <div class="ld-s" id="ld-s">Running algorithm pipeline</div>
+        </div>
+      </div>
+
+
+      <div class="rp" id="rp">
+        <div class="empty">
+          <div class="ei">Route</div>
+          <div class="et">
+            Set traffic on the map<br>
+            select a hospital<br>
+            then click Compute
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<div class="offline" id="offline">
+  Backend offline - start <code>server.exe</code> on port 8765
+</div>
+<div class="toasts" id="toasts"></div>
+
+<script src="frontend/app.js"></script>
+<script src="frontend/auth_ui.js"></script>
+</body>
+</html>
